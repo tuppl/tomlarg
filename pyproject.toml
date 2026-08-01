@@ -1,0 +1,34 @@
+[project]
+name = "tomlarg"
+version = "0.1.0"
+description = "A unified TOML + CLI parser for configurable Python projects"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Dan Nguyen", email = "dan@tuppl.dev" }]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+  "Topic :: Utilities",
+  "Typing :: Typed",
+]
+dependencies = []
+
+[dependency-groups]
+dev = [
+  "pytest>=9.1.1",
+  "ruff>=0.16.1",
+]
+
+[build-system]
+requires = ["uv_build>=0.9.17,<0.10.0"]
+build-backend = "uv_build"
