@@ -8,56 +8,6 @@ import pytest
 from tomlarg import ArgumentParser
 from tomlarg.namespace import Namespace
 
-
-def test_multiple_args():
-    parser = ArgumentParser(exit_on_error=False)
-    parser.add_toml_str('foo = 10\nbar = "hello"\n')
-
-    args = parser.parse_args(["--foo", "99", "--bar", "world"])
-
-    assert args.foo == 99
-    assert args.bar == "world"
-
-
-def test_dotted_key_arg():
-    parser = ArgumentParser(exit_on_error=False)
-    parser.add_toml_str('[db]\nhost = "localhost"\n')
-
-    args = parser.parse_args(["--db.host", "example.com"])
-
-    assert getattr(args, "db.host") == "example.com"
-
-
-def test_list_arg(): ...
-
-
-def test_arg_with_list_value(): ...
-
-
-def test_arg_with_dict_value(): ...
-
-
-def test_arg_overrides_toml():
-    def parse(argv):
-        parser = ArgumentParser(exit_on_error=False)
-        parser.add_toml_str('foo = 10\nbar = "hello"\n')
-        return parser.parse_args(argv)
-
-    assert parse([]).foo == 10
-    assert parse(["--foo", "99"]).foo == 99
-    assert parse(["--foo", "99"]).bar == "hello"
-
-
-def test_add_toml_reads_a_file(tmp_path):
-    path = tmp_path / "config.toml"
-    path.write_text('[db]\nhost = "localhost"\n')
-
-    parser = ArgumentParser(exit_on_error=False)
-    parser.add_toml(path)
-
-    assert getattr(parser.parse_args([]), "db.host") == "localhost"
-
-
 # Rejecting an unrecognised argument raises ArgumentError when exit_on_error is false
 # Python before 3.12.5 exits instead so accept either.
 REJECTED = (argparse.ArgumentError, SystemExit)
@@ -71,9 +21,6 @@ class TestSources:
     def test_constructor_is_keyword_only_so_prog_is_not_shadowed(self):
         assert ArgumentParser("myprog").prog == "myprog"
 
-    def test_constructor_toml_str(self):
-        assert parser("foo = 1").parse_args([]).foo == 1
-
     def test_constructor_toml_dict(self):
         p = ArgumentParser(toml_dict={"foo": 1})
         assert p.parse_args([]).foo == 1
@@ -82,6 +29,32 @@ class TestSources:
         path = tmp_path / "c.toml"
         path.write_text("foo = 1")
         assert ArgumentParser(toml_file=path).parse_args([]).foo == 1
+
+    def test_toml_file_accepts_a_str_path(self, tmp_path):
+        path = tmp_path / "c.toml"
+        path.write_text("foo = 1")
+        assert ArgumentParser(toml_file=str(path)).parse_args([]).foo == 1
+
+    def test_add_toml_reads_a_file(self, tmp_path):
+        path = tmp_path / "config.toml"
+        path.write_text('[db]\nhost = "localhost"\n')
+
+        p = ArgumentParser(exit_on_error=False)
+        p.add_toml(path)
+
+        assert getattr(p.parse_args([]), "db.host") == "localhost"
+
+    def test_missing_file_raises_when_added(self, tmp_path):
+        p = ArgumentParser(exit_on_error=False)
+
+        with pytest.raises(FileNotFoundError):
+            p.add_toml(tmp_path / "absent.toml")
+
+    def test_malformed_toml_raises_when_added(self):
+        p = ArgumentParser(exit_on_error=False)
+
+        with pytest.raises(tomllib.TOMLDecodeError):
+            p.add_toml_str("foo = ")
 
     def test_add_toml_dict_requires_a_dict(self):
         with pytest.raises(TypeError):
@@ -101,8 +74,15 @@ class TestSources:
 
         assert p.parse_args([]).foo == 1
 
-    def test_constructor_toml_dict_empty(self):
-        assert vars(ArgumentParser(toml_dict={}).parse_args([])) == {}
+    def test_source_added_after_a_parse_takes_effect(self):
+        p = ArgumentParser(exit_on_error=False)
+        p.add_toml_str("foo = 1")
+
+        assert p.parse_args([]).foo == 1
+
+        p.add_toml_str('bar = "x"\nfoo = 2')
+
+        assert dict(p.parse_args([])) == {"foo": 2, "bar": "x"}
 
     def test_add_toml_may_follow_add_argument(self):
         p = ArgumentParser(exit_on_error=False)
@@ -121,6 +101,44 @@ class TestSources:
 
 
 class TestLayering:
+    def test_cli_wins_over_toml(self):
+        p = parser('foo = 10\nbar = "hello"')
+
+        assert p.parse_args([]).foo == 10
+        assert p.parse_args(["--foo", "99"]).foo == 99
+        assert p.parse_args(["--foo", "99"]).bar == "hello"
+
+    def test_toml_wins_over_a_declared_default(self):
+        p = ArgumentParser(exit_on_error=False)
+        p.add_argument("--port", type=int, default=1)
+        p.add_toml_str("port = 8080")
+
+        assert p.parse_args([]).port == 8080
+        assert p.parse_args(["--port", "3"]).port == 3
+
+    def test_toml_wins_over_a_default_declared_afterwards(self):
+        p = ArgumentParser(exit_on_error=False, toml_str="port = 8080")
+        p.add_argument("--port", type=int, default=1)
+
+        assert p.parse_args([]).port == 8080
+
+    def test_declared_default_survives_a_silent_toml(self):
+        p = ArgumentParser(exit_on_error=False)
+        p.add_argument("--other", type=int, default=1)
+        p.add_toml_str("port = 8080")
+
+        assert dict(p.parse_args([])) == {"other": 1, "port": 8080}
+
+    def test_conflicting_types_across_sources_are_rejected_at_parse(self):
+        p = ArgumentParser(exit_on_error=False)
+        p.add_toml_str("port = 1")
+        p.add_toml_str('port = "a"')
+
+        with pytest.raises(
+            ValueError, match="cannot replace integer 'port' with string"
+        ):
+            p.parse_args([])
+
     def test_later_source_wins_per_leaf(self):
         p = ArgumentParser(exit_on_error=False)
         p.add_toml_str('[db]\nhost = "x"\nport = 5432')
@@ -145,16 +163,18 @@ class TestTypes:
         assert args.i == 2
         assert args.f == 2.5
 
-    def test_bool_uses_optional_negation(self):
-        p = parser("debug = false")
-        assert p.parse_args([]).debug is False
-        assert p.parse_args(["--debug"]).debug is True
-        assert p.parse_args(["--no-debug"]).debug is False
-
-    def test_bool_default_true_is_negatable(self):
-        p = parser("debug = true")
-        assert p.parse_args([]).debug is True
-        assert p.parse_args(["--no-debug"]).debug is False
+    @pytest.mark.parametrize(
+        "toml, argv, expected",
+        [
+            ("debug = false", [], False),
+            ("debug = false", ["--debug"], True),
+            ("debug = false", ["--no-debug"], False),
+            ("debug = true", [], True),
+            ("debug = true", ["--no-debug"], False),
+        ],
+    )
+    def test_bool_uses_optional_negation(self, toml, argv, expected):
+        assert parser(toml).parse_args(argv).debug is expected
 
     def test_datetime(self):
         args = parser("t = 1979-05-27T07:32:00Z").parse_args([])
@@ -206,6 +226,32 @@ class TestArrays:
     def test_leading_dash_needs_the_equals_form(self):
         assert parser("ports = [1]").parse_args(["--ports=-1,-2"]).ports == [-1, -2]
 
+    def test_a_negative_scalar_does_not_need_the_equals_form(self):
+        p = parser("offset = 0")
+
+        assert p.parse_args(["--offset", "-1"]).offset == -1
+        assert p.parse_args(["--offset=-1"]).offset == -1
+
+    def test_empty_array_takes_a_flag_and_falls_back_to_str(self):
+        p = parser("servers = []")
+
+        assert p.parse_args([]).servers == []
+        assert p.parse_args(["--servers", "a,b"]).servers == ["a", "b"]
+
+    @pytest.mark.parametrize(
+        "toml, default",
+        [
+            ("matrix = [[1, 2], [3, 4]]", [[1, 2], [3, 4]]),
+            ("matrix = [1, { a = 2 }]", [1, {"a": 2}]),
+        ],
+        ids=["nested-arrays", "table-element"],
+    )
+    def test_arrays_of_containers_flatten_to_str(self, toml, default):
+        p = parser(toml)
+
+        assert p.parse_args([]).matrix == default
+        assert p.parse_args(["--matrix", "5,6"]).matrix == ["5", "6"]
+
 
 class TestResultsAreIndependent:
     def test_mutating_an_empty_array_does_not_reach_the_next_parse(self):
@@ -232,10 +278,6 @@ class TestResultsAreIndependent:
         p.parse_args([]).tags.append("polluted")
 
         assert source == {"tags": ["a", "b"]}
-
-    def test_two_parses_yield_separate_arrays(self):
-        p = parser('tags = ["a"]')
-        assert p.parse_args([]).tags is not p.parse_args([]).tags
 
     def test_nested_arrays_are_independent(self):
         p = parser("[db]\nports = [1, 2]")
@@ -354,6 +396,30 @@ class TestSuppression:
         assert "--labels.env" in parser(toml).format_help()
 
 
+class TestKeys:
+    def test_dotted_key_is_settable(self):
+        args = parser('[db]\nhost = "localhost"').parse_args(
+            ["--db.host", "example.com"]
+        )
+
+        assert getattr(args, "db.host") == "example.com"
+
+    def test_key_that_is_not_an_identifier(self):
+        p = parser("line-length = 88")
+
+        assert getattr(p.parse_args([]), "line-length") == 88
+        assert getattr(p.parse_args(["--line-length", "100"]), "line-length") == 100
+
+    def test_nested_key_that_is_not_an_identifier(self):
+        p = parser("[tool.ruff]\nline-length = 88")
+
+        assert "--tool.ruff.line-length" in p.format_help()
+        assert getattr(p.parse_args([]).tool.ruff, "line-length") == 88
+        assert dict(p.parse_args(["--tool.ruff.line-length", "100"])) == {
+            "tool": {"ruff": {"line-length": 100}}
+        }
+
+
 class TestDelimiter:
     @pytest.fixture
     def toml(self):
@@ -406,12 +472,36 @@ class TestDelimiter:
             ArgumentParser(delimiter="")
 
 
+class TestPositionals:
+    def test_positional_coexists_with_toml(self):
+        p = parser("port = 8080")
+        p.add_argument("src")
+
+        assert dict(p.parse_args(["f.txt"])) == {"port": 8080, "src": "f.txt"}
+
+    def test_variadic_positional_takes_its_default_from_toml(self):
+        p = parser('files = ["a.txt"]')
+        p.add_argument("files", nargs="*")
+
+        assert p.parse_args([]).files == ["a.txt"]
+        assert p.parse_args(["b.txt"]).files == ["b.txt"]
+
 
 class TestHelp:
     def test_lists_toml_derived_flags(self):
         help_text = parser('[db]\nhost = "x"\nport = 5432').format_help()
         assert "--db.host" in help_text
         assert "--db.port" in help_text
+
+    def test_usage_lists_toml_derived_flags(self):
+        assert "--db.host" in parser('[db]\nhost = "x"').format_usage()
+
+    def test_usage_does_not_disturb_a_later_parse(self):
+        p = parser("foo = 1")
+        p.format_usage()
+
+        assert p.format_usage() == p.format_usage()
+        assert p.parse_args([]).foo == 1
 
     def test_applies_toml_only_once(self):
         p = parser("foo = 1")
@@ -456,20 +546,19 @@ class TestErrors:
             p.parse_args([])
 
     def test_toml_key_clashing_with_a_declared_option_string_is_rejected(self):
-        p = ArgumentParser(exit_on_error=False)
-        p.add_argument("--port", dest="p", type=int)
-        p.add_toml_str("port = 8080")
+        def clashing():
+            p = ArgumentParser(exit_on_error=False)
+            p.add_argument("--port", dest="p", type=int)
+            p.add_toml_str("port = 8080")
+            return p
 
-        with pytest.raises(ValueError, match="'port' needs --port"):
-            p.parse_args([])
+        expected = "'port' needs --port.*storing to 'p'"
 
-    def test_option_string_clash_names_the_declared_dest(self):
-        p = ArgumentParser(exit_on_error=False)
-        p.add_argument("--port", dest="p", type=int)
-        p.add_toml_str("port = 8080")
+        with pytest.raises(ValueError, match=expected):
+            clashing().parse_args([])
 
-        with pytest.raises(ValueError, match="storing to 'p'"):
-            p.format_help()
+        with pytest.raises(ValueError, match=expected):
+            clashing().format_help()
 
     def test_unknown_flag_still_errors(self):
         with pytest.raises(REJECTED):
@@ -487,3 +576,9 @@ class TestParseKnownArgs:
         args, _ = parser("foo = 1").parse_known_args([], namespace=ns)
         assert args is ns
         assert args.foo == 1
+
+    def test_a_plain_argparse_namespace_stays_flat(self):
+        args = parser('[db]\nhost = "x"').parse_args([], namespace=argparse.Namespace())
+
+        assert getattr(args, "db.host") == "x"
+        assert not hasattr(args, "db")
