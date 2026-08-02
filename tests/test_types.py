@@ -54,6 +54,7 @@ class TestTypeOf:
             ([{"a": 1}], TomlType.ARRAY_OF_TABLES),
             ([], TomlType.ARRAY),
             ([1, 2], TomlType.ARRAY),
+            ([1, "a", True], TomlType.ARRAY),
             ([{"a": 1}, 2], TomlType.ARRAY),
             ("a", TomlType.STRING),
             (1, TomlType.INTEGER),

@@ -1,3 +1,5 @@
+import datetime
+import tomllib
 from types import MappingProxyType
 
 import pytest
@@ -83,6 +85,30 @@ def test_array_element_types_are_not_checked():
     assert deep_merge(base, overlay) == {"ports": ["a"]}
 
 
+def test_mixed_type_arrays_are_legal_toml():
+    base = tomllib.loads('x = [1, "a", true]')
+    overlay = tomllib.loads("x = [1979-05-27, 2.5]")
+    assert deep_merge(base, overlay) == {"x": [datetime.date(1979, 5, 27), 2.5]}
+
+
+def test_a_mixed_array_replaces_a_uniform_one():
+    base = {"x": [1, 2]}
+    overlay = {"x": [1, "a", True]}
+    assert deep_merge(base, overlay) == {"x": [1, "a", True]}
+
+
+def test_a_uniform_array_replaces_a_mixed_one():
+    base = {"x": [1, "a", True]}
+    overlay = {"x": [1, 2]}
+    assert deep_merge(base, overlay) == {"x": [1, 2]}
+
+
+def test_an_array_holding_a_table_is_a_plain_array():
+    base = {"x": [{"a": 1}, 2]}
+    overlay = {"x": [3]}
+    assert deep_merge(base, overlay) == {"x": [3]}
+
+
 def test_array_replacing_table_raises():
     base = {"servers": {"host": "c"}}
     overlay = {"servers": [{"host": "a"}, {"host": "b"}]}
@@ -114,6 +140,13 @@ def test_table_replacing_scalar_raises():
 def test_array_replacing_array_of_tables_raises():
     base = {"servers": [{"host": "a"}]}
     overlay = {"servers": [1, 2]}
+    with pytest.raises(ValueError, match="cannot replace array of tables 'servers'"):
+        deep_merge(base, overlay)
+
+
+def test_mixed_array_replacing_array_of_tables_raises():
+    base = {"servers": [{"host": "a"}]}
+    overlay = {"servers": [{"host": "a"}, 2]}
     with pytest.raises(ValueError, match="cannot replace array of tables 'servers'"):
         deep_merge(base, overlay)
 
