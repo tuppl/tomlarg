@@ -58,6 +58,11 @@ def test_add_toml_reads_a_file(tmp_path):
     assert getattr(parser.parse_args([]), "db.host") == "localhost"
 
 
+# Rejecting an unrecognised argument raises ArgumentError when exit_on_error is false
+# Python before 3.12.5 exits instead so accept either.
+REJECTED = (argparse.ArgumentError, SystemExit)
+
+
 def parser(toml, **kwargs):
     return ArgumentParser(exit_on_error=False, toml_str=toml, **kwargs)
 
@@ -284,8 +289,12 @@ class TestArraysOfTables:
         assert args.servers[0].port == 8001
 
     def test_out_of_range_index_is_rejected(self, toml):
-        with pytest.raises(argparse.ArgumentError):
+        with pytest.raises(REJECTED):
             parser(toml).parse_args(["--servers.5.port", "1"])
+
+    def test_out_of_range_index_is_not_a_known_argument(self, toml):
+        _, extras = parser(toml).parse_known_args(["--servers.5.port", "1"])
+        assert extras == ["--servers.5.port", "1"]
 
     def test_round_trips_to_the_source_shape(self, toml):
         assert dict(parser(toml).parse_args([])) == tomllib.loads(toml)
@@ -410,7 +419,7 @@ class TestErrors:
             p.format_help()
 
     def test_unknown_flag_still_errors(self):
-        with pytest.raises(argparse.ArgumentError):
+        with pytest.raises(REJECTED):
             parser("foo = 1").parse_args(["--nope", "1"])
 
 
