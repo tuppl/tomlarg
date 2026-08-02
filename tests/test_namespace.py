@@ -111,6 +111,43 @@ class TestDottedAssignment:
         assert ns.db.host == "x"
 
 
+class TestDelimiter:
+    def test_defaults_to_a_dot(self):
+        assert Namespace()._delimiter == "."
+
+    def test_a_custom_delimiter_walks_the_path(self):
+        ns = Namespace("__", db=Namespace("__", host="x"))
+
+        assert ns.db__host == "x"
+        assert ns.db__host == ns.db.host
+
+    def test_a_dot_is_an_ordinary_character_under_another_delimiter(self):
+        ns = Namespace("__")
+        setattr(ns, "db.host", "x")
+
+        assert vars(ns) == {"db.host": "x"}
+
+    def test_it_is_not_an_attribute(self):
+        ns = Namespace("__", host="x")
+
+        assert vars(ns) == {"host": "x"}
+        assert dict(ns) == {"host": "x"}
+
+    @pytest.mark.parametrize(
+        "duplicate",
+        [copy.copy, copy.deepcopy, lambda ns: pickle.loads(pickle.dumps(ns))],
+        ids=["copy", "deepcopy", "pickle"],
+    )
+    def test_survives_being_duplicated(self, duplicate):
+        made = duplicate(Namespace("__", db=Namespace("__", host="x")))
+
+        assert made._delimiter == "__"
+        assert made.db__host == "x"
+
+    def test_an_instance_built_without_init_still_has_one(self):
+        assert Namespace.__new__(Namespace)._delimiter == "."
+
+
 class TestCopying:
     def test_copy(self, ns, data):
         assert dict(copy.copy(ns)) == data
