@@ -18,6 +18,8 @@ def flatten(
     Paths named in leaves are kept whole rather than descended into, and a
     string names a single leaf.
     """
+    if not delimiter:
+        raise ValueError("delimiter must not be empty")
     if isinstance(leaves, str):
         leaves = {leaves}
     flat: dict[str, Any] = {}

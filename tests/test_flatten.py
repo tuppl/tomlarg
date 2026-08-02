@@ -113,9 +113,13 @@ class TestDelimiter:
     def test_key_is_legal_under_a_different_delimiter(self):
         assert flatten({"tool.ruff": {"n": 1}}, delimiter="__") == {"tool.ruff__n": 1}
 
-    def test_empty_delimiter_rejects_every_key(self):
-        with pytest.raises(ValueError, match="contains the delimiter ''"):
+    def test_empty_delimiter_is_rejected(self):
+        with pytest.raises(ValueError, match="delimiter must not be empty"):
             flatten({"a": 1}, delimiter="")
+
+    def test_empty_delimiter_is_rejected_before_the_data_is_read(self):
+        with pytest.raises(ValueError, match="delimiter must not be empty"):
+            flatten({}, delimiter="")
 
 
 class TestKeys:
