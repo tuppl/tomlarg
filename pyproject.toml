@@ -7,6 +7,15 @@ requires-python = ">=3.12"
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [{ name = "Dan Nguyen", email = "dan@tuppl.dev" }]
+keywords = [
+  "toml",
+  "argparse",
+  "cli",
+  "config",
+  "configuration",
+  "arguments",
+  "pyproject",
+]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Environment :: Console",
@@ -22,6 +31,11 @@ classifiers = [
   "Typing :: Typed",
 ]
 dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/tuppl/tomlarg"
+Repository = "https://github.com/tuppl/tomlarg"
+Issues = "https://github.com/tuppl/tomlarg/issues"
 
 [dependency-groups]
 dev = [
