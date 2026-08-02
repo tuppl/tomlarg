@@ -16,6 +16,11 @@ runs:
 
     - run: uv sync --locked
       shell: bash
+      env:
+        UV_PYTHON_PREFERENCE: only-managed
 
-    - run: uv run pytest
+    - run: uv run --no-sync python -VV
+      shell: bash
+
+    - run: uv run --no-sync pytest
       shell: bash
