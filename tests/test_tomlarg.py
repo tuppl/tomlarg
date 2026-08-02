@@ -354,6 +354,59 @@ class TestSuppression:
         assert "--labels.env" in parser(toml).format_help()
 
 
+class TestDelimiter:
+    @pytest.fixture
+    def toml(self):
+        return '[db]\nhost = "x"\nport = 5432\n\n[[servers]]\nname = "s1"'
+
+    def test_flags_use_the_delimiter(self, toml):
+        help_text = parser(toml, delimiter="__").format_help()
+
+        assert "--db__host" in help_text
+        assert "--servers__0__name" in help_text
+        assert "--db.host" not in help_text
+
+    def test_results_are_still_nested(self, toml):
+        args = parser(toml, delimiter="__").parse_args(["--db__host", "y"])
+
+        assert args.db.host == "y"
+        assert args.db.port == 5432
+        assert args.servers[0].name == "s1"
+
+    def test_delimited_path_resolves_the_same_value(self, toml):
+        args = parser(toml, delimiter="__").parse_args([])
+
+        assert args.db__host == "x"
+        assert args.servers__0__name == "s1"
+
+    def test_round_trips_to_the_source_shape(self, toml):
+        assert dict(parser(toml, delimiter="__").parse_args([])) == tomllib.loads(toml)
+
+    def test_the_delimiter_is_not_a_parsed_value(self, toml):
+        assert "_Namespace__delimiter" not in vars(
+            parser(toml, delimiter="__").parse_args([])
+        )
+
+    def test_a_dotted_key_is_legal_under_another_delimiter(self):
+        p = ArgumentParser(
+            exit_on_error=False, toml_dict={"tool.ruff": 88}, delimiter="__"
+        )
+
+        assert getattr(p.parse_args(["--tool.ruff", "100"]), "tool.ruff") == 100
+
+    def test_nesting_is_rejected_using_the_delimiter(self):
+        p = ArgumentParser(exit_on_error=False, delimiter="__")
+        p.add_argument("--db")
+
+        with pytest.raises(ValueError, match="both a value and a prefix"):
+            p.add_argument("--db__host")
+
+    def test_empty_delimiter_is_rejected(self):
+        with pytest.raises(ValueError, match="delimiter must not be empty"):
+            ArgumentParser(delimiter="")
+
+
+
 class TestHelp:
     def test_lists_toml_derived_flags(self):
         help_text = parser('[db]\nhost = "x"\nport = 5432').format_help()

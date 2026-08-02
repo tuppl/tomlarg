@@ -37,14 +37,34 @@ class Namespace(argparse.Namespace):
     This Namespace is addressable using delimited paths e.g. ``ns.db.host`` and
     ``getattr(ns, "db.host")`` resolve to the same value. Integer segments
     index into lists, which is what lets arrays of tables round-trip.
+
+    The delimiter is held in a slot rather than an attribute, so it stays out
+    of ``vars()`` and cannot be mistaken for a TOML key.
     """
+
+    __slots__ = ("__delimiter",)
+
+    def __init__(self, delimiter: str = ".", **kwargs: Any) -> None:
+        object.__setattr__(self, "_Namespace__delimiter", delimiter)
+        super().__init__(**kwargs)
+
+    @property
+    def _delimiter(self) -> str:
+        """
+        The delimiter, defaulting for instances built without __init__ such as
+        those copy and pickle create before restoring state.
+        """
+        try:
+            return object.__getattribute__(self, "_Namespace__delimiter")
+        except AttributeError:
+            return "."
 
     def _walk(self, path: str) -> tuple[Any, str]:
         """
         Resolve every segment of path but the last, returning the node reached
         and the segment left over.
         """
-        *parents, leaf = path.split(".")
+        *parents, leaf = path.split(self._delimiter)
         if not leaf or not all(parents):
             raise AttributeError(path)
         node: Any = self
@@ -53,14 +73,14 @@ class Namespace(argparse.Namespace):
         return node, leaf
 
     def __setattr__(self, name: str, value: Any) -> None:
-        if "." not in name:
+        if self._delimiter not in name:
             object.__setattr__(self, name, value)
             return
         node, leaf = self._walk(name)
         _set_child(node, leaf, value)
 
     def __getattr__(self, name: str) -> Any:
-        if "." not in name:
+        if name == "_Namespace__delimiter" or self._delimiter not in name:
             raise AttributeError(name)
         node, leaf = self._walk(name)
         return _child(node, leaf)

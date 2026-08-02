@@ -10,6 +10,7 @@ A unified TOML + CLI parser for configurable Python projects. Every TOML key-val
 - TOML sources merge in the order added, where a later source overrides only the keys it names.
 - Tables are flattened into dotted flags (`--db.pool.size`) at any depth.
 - Arrays of tables are index-addressable (`--servers.1.port`, `--servers.2.port`).
+- Custom delimiter (`ArgumentParser(delimiter="__")` gives `--db__pool__size`).
 - Values are typed as hinted from the TOML: strings, integers, floats, booleans, datetimes, dates, times and arrays.
 - Boolean keys generate affirmative and negated flags: `--debug` and `--no-debug`.
 - Arrays take a comma-separated value (`--tags a,b,c`), with `--tags=` or a bare `--tags` giving an empty one.

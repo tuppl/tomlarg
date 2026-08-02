@@ -30,11 +30,15 @@ class ArgumentParser(argparse.ArgumentParser):
         toml_file: Path | str | None = None,
         toml_str: str | None = None,
         toml_dict: Mapping[str, Any] | None = None,
+        delimiter: str = ".",
         **kwargs: Any,
     ) -> None:
+        if not delimiter:
+            raise ValueError("delimiter must not be empty")
         self._sources: list[Mapping[str, Any]] = []
         self._merged: dict[str, Any] = {}
         self._leaves: set[str] = set()
+        self._delimiter = delimiter
         super().__init__(*args, **kwargs)
         if toml_file is not None:
             self.add_toml(toml_file)
@@ -69,7 +73,7 @@ class ArgumentParser(argparse.ArgumentParser):
         action: argparse.Action = super().add_argument(*args, **kwargs)
 
         def _reject_nesting(value: str, nested: str) -> None:
-            if nested.startswith(value + "."):
+            if nested.startswith(value + self._delimiter):
                 raise ValueError(
                     f"{value!r} is both a value and a prefix of {nested!r}; "
                     "one would overwrite the other"
@@ -121,7 +125,8 @@ class ArgumentParser(argparse.ArgumentParser):
             self._merged = deep_merge(self._merged, source)
         self._sources = []
         self._leaves = {action.dest for action in self._actions}
-        for path, value in flatten(self._merged, leaves=self._leaves).items():
+        flat = flatten(self._merged, self._delimiter, self._leaves)
+        for path, value in flat.items():
             self._bind(path, value)
 
     def parse_known_args(
@@ -136,15 +141,18 @@ class ArgumentParser(argparse.ArgumentParser):
             Build a namespace skeleton from TOML data, so that tables become
             nested namespaces and arrays of tables become real lists.
             """
-            ns = Namespace()
+            ns = Namespace(self._delimiter)
             for key, value in node.items():
                 path = prefix + key
                 if path in self._leaves:
                     built: Any = copy_value(value)
                 elif is_table(value):
-                    built = seed(value, path + ".")
+                    built = seed(value, path + self._delimiter)
                 elif is_array_of_tables(value):
-                    built = [seed(item, f"{path}.{i}.") for i, item in enumerate(value)]
+                    built = [
+                        seed(item, f"{path}{self._delimiter}{i}{self._delimiter}")
+                        for i, item in enumerate(value)
+                    ]
                 else:
                     built = copy_value(value)
                 object.__setattr__(ns, key, built)
