@@ -1,6 +1,6 @@
 import argparse
 from collections.abc import Iterator
-from typing import Any
+from typing import Any, Self
 
 from .types import is_array, is_table
 
@@ -44,20 +44,17 @@ class Namespace(argparse.Namespace):
 
     __slots__ = ("__delimiter",)
 
+    def __new__(cls, delimiter: str = ".", **kwargs: Any) -> Self:
+        namespace = super().__new__(cls)
+        object.__setattr__(namespace, "_Namespace__delimiter", delimiter)
+        return namespace
+
     def __init__(self, delimiter: str = ".", **kwargs: Any) -> None:
-        object.__setattr__(self, "_Namespace__delimiter", delimiter)
         super().__init__(**kwargs)
 
     @property
     def _delimiter(self) -> str:
-        """
-        The delimiter, defaulting for instances built without __init__ such as
-        those copy and pickle create before restoring state.
-        """
-        try:
-            return object.__getattribute__(self, "_Namespace__delimiter")
-        except AttributeError:
-            return "."
+        return object.__getattribute__(self, "_Namespace__delimiter")
 
     def _walk(self, path: str) -> tuple[Any, str]:
         """
@@ -80,7 +77,7 @@ class Namespace(argparse.Namespace):
         _set_child(node, leaf, value)
 
     def __getattr__(self, name: str) -> Any:
-        if name == "_Namespace__delimiter" or self._delimiter not in name:
+        if self._delimiter not in name:
             raise AttributeError(name)
         node, leaf = self._walk(name)
         return _child(node, leaf)
