@@ -1,5 +1,4 @@
 import argparse
-import contextlib
 import tomllib
 from collections.abc import Mapping, Sequence
 from pathlib import Path
@@ -158,11 +157,57 @@ class ArgumentParser(argparse.ArgumentParser):
                 object.__setattr__(ns, key, built)
             return ns
 
+        def graft(target: Namespace, skeleton: Namespace) -> None:
+            """
+            Add whatever the skeleton has and the target lacks, so a caller's
+            namespace gains the tables that dotted dests are assigned through.
+            """
+            for key, value in vars(skeleton).items():
+                existing = getattr(target, key, None)
+                if isinstance(existing, Namespace) and isinstance(value, Namespace):
+                    graft(existing, value)
+                elif not hasattr(target, key):
+                    object.__setattr__(target, key, value)
+
         if namespace is None:
             namespace = seed(self._merged, "")
-        else:
-            self._copy_container_defaults(namespace)
+        elif isinstance(namespace, Namespace):
+            graft(namespace, seed(self._merged, ""))
+        self._open_dest_paths(namespace)
+        self._copy_container_defaults(namespace)
         return super().parse_known_args(args, namespace)
+
+    def _open_dest_paths(self, namespace: argparse.Namespace) -> None:
+        """
+        Create the tables a dotted dest is assigned through, so that a declared
+        argument no TOML source describes still has somewhere to be stored.
+        """
+        if not isinstance(namespace, Namespace):
+            return
+        for action in self._actions:
+            if action.default is argparse.SUPPRESS:
+                continue
+            *parents, _ = action.dest.split(self._delimiter)
+            node: Any = namespace
+            for segment in parents:
+                node = self._open_path(node, segment, action.dest)
+
+    def _open_path(self, node: Any, segment: str, dest: str) -> Any:
+        """
+        Resolve one segment of dest, adding an empty table where none is held.
+        """
+        if is_array(node):
+            if not (segment.isdigit() and int(segment) < len(node)):
+                raise ValueError(
+                    f"argument dest {dest!r} indexes {segment!r}, which is "
+                    "beyond the array it addresses"
+                )
+            return node[int(segment)]
+        child = getattr(node, segment, None)
+        if child is None:
+            child = Namespace(self._delimiter)
+            object.__setattr__(node, segment, child)
+        return child
 
     def _copy_container_defaults(self, namespace: argparse.Namespace) -> None:
         """
@@ -172,9 +217,8 @@ class ArgumentParser(argparse.ArgumentParser):
         for action in self._actions:
             if not (is_table(action.default) or is_array(action.default)):
                 continue
-            with contextlib.suppress(AttributeError, IndexError, ValueError):
-                if not hasattr(namespace, action.dest):
-                    setattr(namespace, action.dest, copy_value(action.default))
+            if not hasattr(namespace, action.dest):
+                setattr(namespace, action.dest, copy_value(action.default))
 
     def format_usage(self) -> str:
         self._apply_toml()

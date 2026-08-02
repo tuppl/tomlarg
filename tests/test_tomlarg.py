@@ -565,6 +565,98 @@ class TestErrors:
             parser("foo = 1").parse_args(["--nope", "1"])
 
 
+class TestDeclaredDottedDests:
+    def test_dest_no_toml_source_describes(self):
+        p = ArgumentParser(exit_on_error=False)
+        p.add_argument("--db.tags", default=[])
+
+        assert dict(p.parse_args([])) == {"db": {"tags": []}}
+
+    def test_dest_no_toml_source_describes_with_a_caller_namespace(self):
+        p = ArgumentParser(exit_on_error=False)
+        p.add_argument("--db.tags", default=[])
+
+        assert dict(p.parse_args([], namespace=Namespace())) == {"db": {"tags": []}}
+
+    def test_dest_beside_a_table_the_toml_does_describe(self):
+        p = ArgumentParser(exit_on_error=False, toml_str='[db]\nhost = "x"')
+        p.add_argument("--db.tags", default=[])
+
+        assert dict(p.parse_args([])) == {"db": {"host": "x", "tags": []}}
+
+    def test_container_defaults_stay_independent(self):
+        p = ArgumentParser(exit_on_error=False)
+        p.add_argument("--db.tags", default=[])
+        p.parse_args([]).db.tags.append("polluted")
+
+        assert p.parse_args([]).db.tags == []
+
+    def test_index_beyond_the_array_is_named(self):
+        p = ArgumentParser(exit_on_error=False, toml_str='[[servers]]\nhost = "s1"')
+        p.add_argument("--servers.5.tags", default=[])
+
+        with pytest.raises(ValueError, match="'servers.5.tags' indexes '5'"):
+            p.parse_args([])
+
+    def test_a_suppressed_dest_makes_no_table(self):
+        p = ArgumentParser(exit_on_error=False)
+        p.add_argument("--db.tags", default=argparse.SUPPRESS)
+
+        assert dict(p.parse_args([])) == {}
+
+
+class TestCallerSuppliedNamespace:
+    def test_table_is_nested(self):
+        args = parser('[db]\nhost = "x"').parse_args([], namespace=Namespace())
+
+        assert dict(args) == {"db": {"host": "x"}}
+        assert args.db.host == "x"
+
+    def test_nested_table_is_nested(self):
+        args = parser("[db.pool]\nsize = 5").parse_args([], namespace=Namespace())
+
+        assert dict(args) == {"db": {"pool": {"size": 5}}}
+
+    def test_array_of_tables_is_nested(self):
+        args = parser('[[servers]]\nhost = "s1"').parse_args([], namespace=Namespace())
+
+        assert dict(args) == {"servers": [{"host": "s1"}]}
+        assert args.servers[0].host == "s1"
+
+    def test_value_given_on_the_cli(self):
+        args = parser('[db]\nhost = "x"').parse_args(
+            ["--db.host", "y"], namespace=Namespace()
+        )
+
+        assert args.db.host == "y"
+
+    def test_parse_known_args_takes_the_same_path(self):
+        args, _ = parser('[db]\nhost = "x"').parse_known_args([], namespace=Namespace())
+
+        assert dict(args) == {"db": {"host": "x"}}
+
+    def test_caller_attributes_are_kept(self):
+        args = parser('[db]\nhost = "x"').parse_args(
+            [], namespace=Namespace(extra="keep")
+        )
+
+        assert dict(args) == {"extra": "keep", "db": {"host": "x"}}
+
+    def test_a_partly_built_namespace_is_completed(self):
+        args = parser('[db.pool]\nsize = 5\n[db]\nhost = "x"').parse_args(
+            [], namespace=Namespace(db=Namespace())
+        )
+
+        assert dict(args) == {"db": {"pool": {"size": 5}, "host": "x"}}
+
+    def test_a_caller_value_wins_over_the_toml_default(self):
+        args = parser('[db]\nhost = "x"').parse_args(
+            [], namespace=Namespace(db=Namespace(host="mine"))
+        )
+
+        assert args.db.host == "mine"
+
+
 class TestParseKnownArgs:
     def test_returns_extras(self):
         args, extras = parser("foo = 1").parse_known_args(["--nope"])
