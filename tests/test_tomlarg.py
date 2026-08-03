@@ -2,6 +2,7 @@ import argparse
 import datetime
 import json
 import tomllib
+from types import MappingProxyType
 
 import pytest
 
@@ -65,9 +66,24 @@ class TestSources:
         with pytest.raises(tomllib.TOMLDecodeError):
             p.add_toml_str("foo = ")
 
-    def test_add_toml_dict_requires_a_dict(self):
+    def test_add_toml_dict_requires_an_argument(self):
         with pytest.raises(TypeError):
             ArgumentParser(exit_on_error=False).add_toml_dict()
+
+    @pytest.mark.parametrize("data", [[1, 2], "hello", None, 42, {1, 2}])
+    def test_add_toml_dict_rejects_a_non_mapping(self, data):
+        with pytest.raises(TypeError, match="TOML data must be a mapping"):
+            ArgumentParser(exit_on_error=False).add_toml_dict(data)
+
+    def test_a_non_mapping_is_rejected_when_added_not_when_parsed(self):
+        with pytest.raises(TypeError, match="must be a mapping, not list"):
+            ArgumentParser(exit_on_error=False, toml_dict=[1, 2])
+
+    def test_add_toml_dict_accepts_any_mapping(self):
+        p = ArgumentParser(exit_on_error=False)
+        p.add_toml_dict(MappingProxyType({"foo": 1}))
+
+        assert p.parse_args([]).foo == 1
 
     def test_add_toml_dict_accepts_an_empty_dict(self):
         p = ArgumentParser(exit_on_error=False)

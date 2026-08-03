@@ -77,6 +77,8 @@ class ArgumentParser(argparse.ArgumentParser):
         """
         Record already-parsed TOML data as a source of defaults.
         """
+        if not is_table(data):
+            raise TypeError(f"TOML data must be a mapping, not {type(data).__name__}")
         self._sources.append(data)
 
     def add_argument(self, *args: Any, **kwargs: Any) -> argparse.Action:
