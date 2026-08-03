@@ -742,6 +742,12 @@ class TestReservedDests:
     def test_a_nested_key_of_that_name_is_untouched(self):
         assert dict(parser("[db]\nhelp = 1").parse_args([])) == {"db": {"help": 1}}
 
+    def test_an_empty_key_is_rejected_rather_than_given_a_bare_flag(self):
+        p = ArgumentParser(exit_on_error=False, toml_dict={"": 1, "ok": 2})
+
+        with pytest.raises(ValueError, match="key '' is empty"):
+            p.parse_args([])
+
     def test_a_similar_name_is_untouched(self):
         p = parser("[helper]\ncolor = true")
 

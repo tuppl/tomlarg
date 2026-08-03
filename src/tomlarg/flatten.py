@@ -28,6 +28,8 @@ def flatten(
         for key, value in node.items():
             if not isinstance(key, str):
                 raise TypeError(f"key {key!r} is not a string: {type(key).__name__}")
+            if not key:
+                raise ValueError(f"key {key!r} is empty, so it has no flag")
             if delimiter in key:
                 raise ValueError(f"key {key!r} contains the delimiter {delimiter!r}")
             path = prefix + key

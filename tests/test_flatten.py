@@ -152,14 +152,24 @@ class TestKeys:
         with pytest.raises(TypeError, match=expected):
             flatten({key: 1})
 
-    def test_empty_key_is_kept(self):
+    def test_an_empty_key_is_legal_toml_but_rejected(self):
         assert tomllib.loads('"" = 1') == {"": 1}
-        assert flatten({"": 1}) == {"": 1}
 
-    def test_empty_key_emits_a_path_that_is_illegal_as_a_key(self):
-        assert flatten({"": {"a": 1}}) == {".a": 1}
-        with pytest.raises(ValueError, match="contains the delimiter"):
-            flatten({".a": 1})
+        with pytest.raises(ValueError, match="key '' is empty"):
+            flatten({"": 1})
+
+    @pytest.mark.parametrize(
+        "data",
+        [{"": {"a": 1}}, {"t": {"": 1}}, {"servers": [{"": 1}]}],
+        ids=["table-under-it", "nested", "array-of-tables"],
+    )
+    def test_an_empty_key_is_rejected_at_any_depth(self, data):
+        with pytest.raises(ValueError, match="key '' is empty"):
+            flatten(data)
+
+    def test_an_empty_leaf_path_does_not_excuse_it(self):
+        with pytest.raises(ValueError, match="key '' is empty"):
+            flatten({"": 1}, leaves={""})
 
 
 class TestLeaves:
