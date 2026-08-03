@@ -21,6 +21,9 @@ class ArgumentParser(argparse.ArgumentParser):
     and --help lists every TOML-derived flag.
 
     Precedence (to lowest): command line, TOML, add_argument defaults.
+
+    Abbreviations are by default disabled because a prefix of a dotted flag
+    reads as a table that could be set rather than as a shortening of a leaf.
     """
 
     def __init__(
@@ -38,6 +41,7 @@ class ArgumentParser(argparse.ArgumentParser):
         self._merged: dict[str, Any] = {}
         self._leaves: set[str] = set()
         self._delimiter = delimiter
+        kwargs.setdefault("allow_abbrev", False)
         super().__init__(*args, **kwargs)
         if toml_file is not None:
             self.add_toml(toml_file)

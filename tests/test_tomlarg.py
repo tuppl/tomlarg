@@ -651,6 +651,31 @@ class TestDeclaredDottedDests:
         assert dict(p.parse_args([])) == {}
 
 
+class TestAbbreviation:
+    def test_a_prefix_of_a_dotted_flag_is_not_a_flag(self):
+        with pytest.raises(REJECTED):
+            parser('[db]\nhost = "x"').parse_args(["--db", "y"])
+
+    def test_the_whole_flag_still_works(self):
+        args = parser('[db]\nhost = "x"').parse_args(["--db.host", "y"])
+
+        assert args.db.host == "y"
+
+    def test_an_unrelated_key_does_not_change_the_outcome(self):
+        for toml in ('[db]\nhost = "x"', '[db]\nhost = "x"\nport = 5432'):
+            with pytest.raises(REJECTED):
+                parser(toml).parse_args(["--db", "y"])
+
+    def test_a_prefix_of_an_indexed_flag_is_not_a_flag(self):
+        with pytest.raises(REJECTED):
+            parser('[[servers]]\nhost = "s1"').parse_args(["--servers", "x"])
+
+    def test_it_can_be_asked_for(self):
+        p = parser('[db]\nhost = "x"', allow_abbrev=True)
+
+        assert p.parse_args(["--db", "y"]).db.host == "y"
+
+
 class TestCallerSuppliedNamespace:
     def test_table_is_nested(self):
         args = parser('[db]\nhost = "x"').parse_args([], namespace=Namespace())
