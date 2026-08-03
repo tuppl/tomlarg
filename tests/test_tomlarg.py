@@ -651,6 +651,44 @@ class TestDeclaredDottedDests:
         assert dict(p.parse_args([])) == {}
 
 
+class TestReservedDests:
+    def test_a_key_named_after_the_help_flag_is_rejected(self):
+        p = parser('help = "hi"')
+
+        with pytest.raises(ValueError, match="'help' is the dest of --help"):
+            p.parse_args([])
+
+    def test_a_table_named_after_the_help_flag_is_rejected(self):
+        p = parser("[help]\ncolor = true")
+
+        with pytest.raises(ValueError, match="'help' is the dest of --help"):
+            p.parse_args([])
+
+    def test_a_key_named_after_a_declared_version_flag_is_rejected(self):
+        p = parser('version = "1.2.3"')
+        p.add_argument("--version", action="version", version="1.0")
+
+        with pytest.raises(ValueError, match="'version' is the dest of --version"):
+            p.parse_args([])
+
+    def test_version_is_ordinary_until_the_flag_is_declared(self):
+        assert dict(parser('version = "1.2.3"').parse_args([])) == {"version": "1.2.3"}
+
+    def test_add_help_frees_the_name(self):
+        p = ArgumentParser(exit_on_error=False, add_help=False, toml_str='help = "hi"')
+
+        assert dict(p.parse_args([])) == {"help": "hi"}
+
+    def test_a_nested_key_of_that_name_is_untouched(self):
+        assert dict(parser("[db]\nhelp = 1").parse_args([])) == {"db": {"help": 1}}
+
+    def test_a_similar_name_is_untouched(self):
+        p = parser("[helper]\ncolor = true")
+
+        assert "--helper.color" in p.format_help()
+        assert dict(p.parse_args([])) == {"helper": {"color": True}}
+
+
 class TestSuppressedDefaults:
     @pytest.fixture
     def suppressed(self):

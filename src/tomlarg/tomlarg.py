@@ -10,6 +10,16 @@ from .merge import deep_merge
 from .namespace import Namespace
 from .types import copy_value, is_array, is_array_of_tables, is_table
 
+_RESERVED = (argparse._HelpAction, argparse._VersionAction)
+
+
+def _stores_nothing(action: argparse.Action | None) -> bool:
+    """
+    Report whether an action acts on the parser instead of storing a value,
+    leaving a TOML key of the same dest nowhere to go.
+    """
+    return isinstance(action, _RESERVED)
+
 
 class ArgumentParser(argparse.ArgumentParser):
     """
@@ -100,6 +110,12 @@ class ArgumentParser(argparse.ArgumentParser):
         given the value anyway, a key named by a source having been supplied.
         """
         action = self._action_for(path)
+        if _stores_nothing(action):
+            raise ValueError(
+                f"TOML key {path!r} is the dest of {action.option_strings[-1]}, "
+                "which stores nothing; rename the key or declare that argument "
+                "with a dest of its own"
+            )
         if action is not None:
             action.default = value
             return
