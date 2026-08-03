@@ -96,12 +96,12 @@ class ArgumentParser(argparse.ArgumentParser):
         Make value the default for path, adding the flag if it is undeclared.
 
         An undeclared table has no command-line spelling, so it is left alone
-        rather than given a flag.
+        rather than given a flag. A dest declared with a suppressed default is
+        given the value anyway, a key named by a source having been supplied.
         """
         action = self._action_for(path)
         if action is not None:
-            if action.default is not argparse.SUPPRESS:
-                action.default = value
+            action.default = value
             return
         if is_table(value):
             return

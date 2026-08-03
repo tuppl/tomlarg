@@ -651,6 +651,38 @@ class TestDeclaredDottedDests:
         assert dict(p.parse_args([])) == {}
 
 
+class TestSuppressedDefaults:
+    @pytest.fixture
+    def suppressed(self):
+        def build(toml):
+            p = ArgumentParser(exit_on_error=False, toml_str=toml)
+            p.add_argument("--port", type=int, default=argparse.SUPPRESS)
+            return p
+
+        return build
+
+    def test_a_key_no_source_names_stays_suppressed(self, suppressed):
+        assert dict(suppressed("other = 1").parse_args([])) == {"other": 1}
+
+    def test_a_key_the_toml_names_is_supplied(self, suppressed):
+        assert dict(suppressed("port = 8080").parse_args([])) == {"port": 8080}
+
+    def test_a_caller_namespace_is_supplied_the_same_value(self, suppressed):
+        args = suppressed("port = 8080").parse_args([], namespace=Namespace())
+
+        assert dict(args) == {"port": 8080}
+
+    def test_a_plain_namespace_is_supplied_the_same_value(self, suppressed):
+        args = suppressed("port = 8080").parse_args([], namespace=argparse.Namespace())
+
+        assert vars(args) == {"port": 8080}
+
+    def test_the_cli_still_wins(self, suppressed):
+        args = suppressed("port = 8080").parse_args(["--port", "9"])
+
+        assert dict(args) == {"port": 9}
+
+
 class TestAbbreviation:
     def test_a_prefix_of_a_dotted_flag_is_not_a_flag(self):
         with pytest.raises(REJECTED):
