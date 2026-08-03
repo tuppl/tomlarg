@@ -120,13 +120,16 @@ class ArgumentParser(argparse.ArgumentParser):
         """
         if not self._sources:
             return
+        merged = self._merged
         for source in self._sources:
-            self._merged = deep_merge(self._merged, source)
-        self._sources = []
-        self._leaves = {action.dest for action in self._actions}
-        flat = flatten(self._merged, self._delimiter, self._leaves)
+            merged = deep_merge(merged, source)
+        leaves = {action.dest for action in self._actions}
+        flat = flatten(merged, self._delimiter, leaves)
         for path, value in flat.items():
             self._bind(path, value)
+        self._merged = merged
+        self._leaves = leaves
+        self._sources = []
 
     def parse_known_args(
         self,

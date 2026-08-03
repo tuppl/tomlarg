@@ -17,6 +17,15 @@ def parser(toml, **kwargs):
     return ArgumentParser(exit_on_error=False, toml_str=toml, **kwargs)
 
 
+def errors_twice(p):
+    messages = []
+    for _ in range(2):
+        with pytest.raises((TypeError, ValueError)) as raised:
+            p.parse_args([])
+        messages.append(str(raised.value))
+    return messages
+
+
 class TestSources:
     def test_constructor_is_keyword_only_so_prog_is_not_shadowed(self):
         assert ArgumentParser("myprog").prog == "myprog"
@@ -559,6 +568,43 @@ class TestErrors:
 
         with pytest.raises(ValueError, match=expected):
             clashing().format_help()
+
+    def test_an_option_string_clash_is_raised_about_again(self):
+        p = ArgumentParser(exit_on_error=False)
+        p.add_argument("--port", dest="p", type=int)
+        p.add_toml_str("port = 8080")
+
+        first, second = errors_twice(p)
+
+        assert "'port' needs --port" in first
+        assert first == second
+
+    def test_an_unsupported_value_is_raised_about_again(self):
+        p = ArgumentParser(exit_on_error=False)
+        p.add_toml_dict({"when": object()})
+
+        first, second = errors_twice(p)
+
+        assert "unsupported TOML value type for 'when'" in first
+        assert first == second
+
+    def test_a_non_string_key_is_raised_about_again(self):
+        p = ArgumentParser(exit_on_error=False)
+        p.add_toml_dict({"db": {1: "a"}})
+
+        first, second = errors_twice(p)
+
+        assert "key 1 is not a string: int" in first
+        assert first == second
+
+    def test_keys_after_a_failure_are_never_bound(self):
+        p = ArgumentParser(exit_on_error=False)
+        p.add_toml_dict({"aaa": 1, "bad": object(), "zzz": 2})
+
+        first, second = errors_twice(p)
+
+        assert first == second
+        assert "--zzz" not in p._option_string_actions
 
     def test_unknown_flag_still_errors(self):
         with pytest.raises(REJECTED):
