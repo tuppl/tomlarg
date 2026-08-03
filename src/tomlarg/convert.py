@@ -83,6 +83,36 @@ class StoreArray(argparse.Action):
         setattr(namespace, self.dest, list(values))
 
 
+class BooleanOptional(argparse.Action):
+    """
+    Store a boolean, giving every option string a negated spelling.
+
+    argparse.BooleanOptionalAction builds that spelling from a literal ``--``,
+    so the prefix is taken from the option string itself instead.
+    """
+
+    def __init__(self, option_strings: list[str], dest: str, **kwargs: Any) -> None:
+        spellings = []
+        self._negative = set()
+        for option in option_strings:
+            negative = f"{option[:2]}no-{option[2:]}"
+            spellings += [option, negative]
+            self._negative.add(negative)
+        super().__init__(spellings, dest, nargs=0, **kwargs)
+
+    def __call__(
+        self,
+        parser: argparse.ArgumentParser,
+        namespace: argparse.Namespace,
+        values: Any,
+        option_string: str | None = None,
+    ) -> None:
+        setattr(namespace, self.dest, option_string not in self._negative)
+
+    def format_usage(self) -> str:
+        return " | ".join(self.option_strings)
+
+
 def argument_kwargs(key: str, value: Any) -> dict[str, Any]:
     """
     Build the add_argument keyword arguments describing a TOML value.
@@ -91,7 +121,7 @@ def argument_kwargs(key: str, value: Any) -> dict[str, Any]:
     """
     toml_type = type_of(value)
     if toml_type is TomlType.BOOLEAN:
-        return {"action": argparse.BooleanOptionalAction, "default": value}
+        return {"action": BooleanOptional, "default": value}
     if toml_type in (TomlType.ARRAY, TomlType.ARRAY_OF_TABLES):
         return {
             "action": StoreArray,

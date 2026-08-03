@@ -667,6 +667,50 @@ class TestDeclaredDottedDests:
         assert dict(p.parse_args([])) == {}
 
 
+class TestPrefixChars:
+    @pytest.fixture
+    def plus(self):
+        def build(toml):
+            return ArgumentParser(exit_on_error=False, prefix_chars="+", toml_str=toml)
+
+        return build
+
+    def test_flags_use_the_declared_prefix(self, plus):
+        assert plus("foo = 1").parse_args(["++foo", "2"]).foo == 2
+
+    def test_dotted_flags_use_it_too(self, plus):
+        args = plus('[db]\nhost = "x"').parse_args(["++db.host", "y"])
+
+        assert args.db.host == "y"
+
+    def test_a_boolean_is_still_negatable(self, plus):
+        p = plus("debug = true")
+
+        assert p.parse_args([]).debug is True
+        assert p.parse_args(["++no-debug"]).debug is False
+        assert p.parse_args(["++debug"]).debug is True
+
+    def test_an_array_still_takes_a_comma_separated_value(self, plus):
+        assert plus('tags = ["a"]').parse_args(["++tags", "x,y"]).tags == ["x", "y"]
+
+    def test_help_lists_both_boolean_spellings(self, plus):
+        help_text = plus("debug = false").format_help()
+
+        assert "++debug" in help_text
+        assert "++no-debug" in help_text
+
+    def test_the_first_prefix_char_is_the_one_used(self):
+        p = ArgumentParser(exit_on_error=False, prefix_chars="/+", toml_str="foo = 1")
+
+        assert p.parse_args(["//foo", "2"]).foo == 2
+
+    def test_the_default_prefix_is_unchanged(self):
+        p = parser("debug = true\nfoo = 1")
+
+        assert p.parse_args(["--no-debug", "--foo", "2"]).debug is False
+        assert "--no-debug" in p.format_help()
+
+
 class TestReservedDests:
     def test_a_key_named_after_the_help_flag_is_rejected(self):
         p = parser('help = "hi"')

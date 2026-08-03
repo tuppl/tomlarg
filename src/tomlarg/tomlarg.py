@@ -123,7 +123,7 @@ class ArgumentParser(argparse.ArgumentParser):
             return
         if is_table(value):
             return
-        option = f"--{path}"
+        option = f"{self.prefix_chars[0] * 2}{path}"
         taken = self._option_string_actions.get(option)
         if taken is not None:
             raise ValueError(

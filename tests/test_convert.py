@@ -4,6 +4,7 @@ import datetime
 import pytest
 
 from tomlarg.convert import (
+    BooleanOptional,
     argument_kwargs,
     comma_separated,
     converter_for,
@@ -82,10 +83,45 @@ class TestElementConverter:
         assert element_converter([None, None]) is str
 
 
+class TestBooleanOptional:
+    @pytest.mark.parametrize(
+        "option, expected",
+        [
+            ("--debug", ["--debug", "--no-debug"]),
+            ("++debug", ["++debug", "++no-debug"]),
+            ("//debug", ["//debug", "//no-debug"]),
+            ("--db.debug", ["--db.debug", "--no-db.debug"]),
+        ],
+    )
+    def test_every_option_gains_a_negated_spelling(self, option, expected):
+        action = BooleanOptional([option], "debug")
+
+        assert action.option_strings == expected
+
+    def test_it_takes_no_argument(self):
+        assert BooleanOptional(["--debug"], "debug").nargs == 0
+
+    @pytest.mark.parametrize(
+        "option, expected", [("++debug", True), ("++no-debug", False)]
+    )
+    def test_the_negated_spelling_stores_false(self, option, expected):
+        action = BooleanOptional(["++debug"], "debug")
+        namespace = argparse.Namespace()
+
+        action(argparse.ArgumentParser(), namespace, None, option)
+
+        assert namespace.debug is expected
+
+    def test_usage_shows_both_spellings(self):
+        assert BooleanOptional(["++debug"], "debug").format_usage() == (
+            "++debug | ++no-debug"
+        )
+
+
 class TestArgumentKwargs:
     def test_bool_becomes_a_negatable_flag(self):
         assert argument_kwargs("debug", False) == {
-            "action": argparse.BooleanOptionalAction,
+            "action": BooleanOptional,
             "default": False,
         }
 
